@@ -3,17 +3,22 @@
 use anyhow::{Result, anyhow};
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 
+/// Registry value / desktop-file name; the Windows uninstaller removes it too.
+pub const NAME: &str = "rnnoise-mic";
+
 fn launcher() -> Result<AutoLaunch> {
     let exe = std::env::current_exe()?;
     let exe = exe.to_str().ok_or_else(|| anyhow!("executable path is not valid UTF-8"))?;
+    // The Run value is a command line: quote the path, the install folder has a space.
+    #[cfg(windows)]
+    let exe = format!("\"{exe}\"");
     // Re-launch with the same options this copy was started with (e.g. --input).
     let args: Vec<String> = std::env::args().skip(1).collect();
-    AutoLaunchBuilder::new()
-        .set_app_name("rnnoise-mic")
-        .set_app_path(exe)
-        .set_args(&args)
-        .build()
-        .map_err(|e| anyhow!("{e}"))
+    let mut builder = AutoLaunchBuilder::new();
+    builder.set_app_name(NAME).set_app_path(&exe).set_args(&args);
+    #[cfg(windows)]
+    builder.set_windows_enable_mode(auto_launch::WindowsEnableMode::CurrentUser);
+    builder.build().map_err(|e| anyhow!("{e}"))
 }
 
 pub fn is_enabled() -> bool {

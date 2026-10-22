@@ -1,0 +1,36 @@
+﻿RNNoise Mic is installed. It runs in the system tray (microphone icon).
+
+One-time setup
+1. Install VB-Audio Virtual Cable (free): https://vb-audio.com/Cable/
+   Run VBCABLE_Setup_x64.exe as administrator, click "Install Driver", reboot.
+2. Settings > System > Sound > Input: choose "CABLE Output".
+   Keep Output on your headphones/speakers - never "CABLE Input".
+3. In apps that pick a specific microphone (Discord, OBS, Zoom...),
+   choose "CABLE Output" or "Default".
+
+Notes
+- CABLE Output is silent while RNNoise Mic is not running. Keep
+  "Start at login" on (tray menu) so it is always available.
+- Turn off other noise suppression (Krisp etc.) in your apps.
+- To uninstall: Settings > Apps > Installed apps > RNNoise Mic.
+  Afterwards, set your input back to your real microphone.
+
+----------------------------------------------------------------------
+
+RNNoise Mic kuruldu. Sistem tepsisinde (mikrofon simgesi) çalışır.
+
+Tek seferlik kurulum
+1. VB-Audio Virtual Cable'ı kurun (ücretsiz): https://vb-audio.com/Cable/
+   VBCABLE_Setup_x64.exe'yi yönetici olarak çalıştırın, "Install Driver"a
+   basın, bilgisayarı yeniden başlatın.
+2. Ayarlar > Sistem > Ses > Giriş: "CABLE Output" seçin.
+   Çıkış kulaklık/hoparlörünüzde kalsın - asla "CABLE Input" seçmeyin.
+3. Mikrofonu ayrıca seçilen uygulamalarda (Discord, OBS, Zoom...)
+   "CABLE Output" ya da "Varsayılan" seçin.
+
+Notlar
+- RNNoise Mic çalışmıyorken CABLE Output sessizdir. Tepsi menüsünden
+  "Start at login" açık kalsın.
+- Uygulamalardaki diğer gürültü engellemeyi (Krisp vb.) kapatın.
+- Kaldırmak için: Ayarlar > Uygulamalar > Yüklü uygulamalar > RNNoise Mic.
+  Ardından girişi tekrar gerçek mikrofonunuza alın.
