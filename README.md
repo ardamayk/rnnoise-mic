@@ -1,0 +1,112 @@
+# RNNoise Mic
+
+System-wide microphone noise suppression for **Windows** and **Linux**, powered by
+[RNNoise](https://jmvalin.ca/demo/rnnoise/). It sits in the system tray, cleans up your
+real microphone and exposes the result as a **virtual microphone** that any app
+(Discord, Zoom, Teams, OBS, browsers, games) can use.
+
+```
+real mic ──► RNNoise Mic (RNNoise, 48 kHz, 10 ms frames) ──► virtual mic ──► every app
+```
+
+- Tray icon: green = active, grey = suppression off, red = error (retries automatically,
+  e.g. after you re-plug the mic)
+- Tray menu: noise suppression on/off, **Start at login**, About / How to use, Quit
+- No console window; a terminal mode with a live meter is available for debugging
+- Pure Rust: [`nnnoiseless`](https://crates.io/crates/nnnoiseless) (RNNoise port) +
+  [`cpal`](https://crates.io/crates/cpal) audio I/O; ~2 MB single executable
+
+| Platform | Virtual microphone | Requirements |
+|---|---|---|
+| Windows 10/11 | [VB-Audio Virtual Cable](https://vb-audio.com/Cable/): app writes to **CABLE Input**, apps record from **CABLE Output** | VB-Cable driver (free) |
+| Linux | **RNNoise-Microphone**, created automatically while the app runs (`module-pipe-source`) | PulseAudio or PipeWire (`pipewire-pulse`), `pactl` |
+
+> Linux support is newer and less tested than Windows. Bug reports are welcome.
+
+## Setup
+
+### Windows
+
+1. Install [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) (run the setup as
+   administrator, click *Install Driver*) and reboot.
+2. Start `rnnoise-mic.exe`. A microphone icon appears in the system tray.
+3. **Settings → System → Sound → Input**: choose **CABLE Output**.
+   Keep **Output** on your headphones/speakers. Never pick *CABLE Input* as output.
+4. Apps that select a specific microphone (Discord, OBS, Zoom...): pick
+   **CABLE Output** or **Default**.
+5. Tray menu → **Start at login**, so the virtual mic is always live.
+   While RNNoise Mic is not running, CABLE Output is silent.
+
+Turn off other noise suppression (Krisp, etc.) in your apps; stacking two
+suppressors tends to make voices sound robotic.
+
+### Linux
+
+1. Make sure `pactl` is installed (`pulseaudio-utils` on Debian/Ubuntu; it works with
+   PipeWire too) and a tray host is available (most desktops; on GNOME install the
+   *AppIndicator* extension).
+2. Start `rnnoise-mic`. A virtual source **RNNoise-Microphone** appears.
+3. Choose **RNNoise-Microphone** in Settings → Sound → Input, or in each app.
+4. Tray menu → **Start at login** (creates `~/.config/autostart/rnnoise-mic.desktop`).
+
+The virtual microphone is removed when the app quits. If the app crashes, the stale
+module is cleaned up on the next start.
+
+## Building
+
+```bash
+cargo build --release
+```
+
+- **Windows:** Rust (MSVC toolchain, or GNU + MinGW-w64). Output: `target/release/rnnoise-mic.exe`.
+- **Linux:** Rust plus GTK headers for the tray icon:
+  `sudo apt install libgtk-3-dev libayatana-appindicator3-dev`
+  (Fedora: `gtk3-devel libayatana-appindicator-gtk3-devel`).
+
+Windows' *Smart App Control* blocks unsigned executables you build yourself, including
+Cargo build scripts. Turn it off, or sign the binary.
+
+## Command line
+
+Without options, RNNoise Mic runs in the tray. Options are also used for the
+tray mode, and are preserved when you enable *Start at login*.
+
+```bash
+rnnoise-mic --list               # list audio devices
+rnnoise-mic --meter              # run in the terminal with a live meter
+rnnoise-mic --cli -i quadcast    # terminal mode, pick a microphone by name
+rnnoise-mic --vad-gate 0.6       # also mute when voice probability < 60 %
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--cli` | | Run in the terminal instead of the tray |
+| `--meter` | | Terminal mode with input level, voice probability and buffer status |
+| `--list` | | List devices and exit |
+| `-i, --input <name>` | system default (virtual mics are skipped) | Real microphone: name substring or device id |
+| `-o, --output <name>` (Windows) | VB-Cable *CABLE Input* | Output device (another virtual cable) |
+| `--latency-ms <ms>` (Windows) | 30 | Buffer between capture and playback |
+| `--set-default` (Linux) | off | Make RNNoise-Microphone the default input while running |
+| `--vad-gate <0..1>` | 0 (off) | Mute frames whose voice probability is below this |
+| `--vad-hold-ms <ms>` | 250 | Keep the gate open this long after speech |
+| `--bypass` | off | Start with noise suppression off |
+
+## How it works
+
+- Capture the real microphone (WASAPI on Windows, the PulseAudio protocol on Linux),
+  downmix to mono and resample to 48 kHz.
+- Run RNNoise on 10 ms frames. It also yields a voice-activity probability, used by
+  the optional gate.
+- **Windows:** play into VB-Cable through a small ring buffer that absorbs clock drift
+  between the two devices.
+- **Linux:** write into a FIFO behind a PulseAudio/PipeWire `module-pipe-source`. The
+  source is clocked by our writes, so there is no second clock to drift against.
+- The microphone is chosen before the virtual one exists, and virtual devices are never
+  picked as input, so the app cannot record itself.
+- Only one copy runs at a time.
+
+## License
+
+[MIT](LICENSE). Third-party components: RNNoise and its Rust port `nnnoiseless` are
+BSD-3-Clause; `cpal` and the other dependencies are MIT/Apache-2.0. VB-Audio Virtual
+Cable is a separate donationware product by VB-Audio and is not bundled.

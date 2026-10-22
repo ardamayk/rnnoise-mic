@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: rnnoise-mic-windows-x64.exe
+            binary: target/release/rnnoise-mic.exe
+          - os: ubuntu-latest
+            artifact: rnnoise-mic-linux-x64
+            binary: target/release/rnnoise-mic
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev libasound2-dev
+      - run: cargo test --release
+      - run: cargo build --release
+      - name: Rename binary
+        shell: bash
+        run: cp "${{ matrix.binary }}" "${{ matrix.artifact }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ github.ref_name }}" >/dev/null 2>&1 \
+            || gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --generate-notes \
+            || true
+          gh release upload "${{ github.ref_name }}" "${{ matrix.artifact }}" --clobber
