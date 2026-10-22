@@ -3,7 +3,7 @@
 ; Installs per user (no admin prompt) and registers in Settings > Apps > Installed apps.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.1.1"
 #endif
 #ifndef BinDir
   #define BinDir "..\target\release"
@@ -33,7 +33,6 @@ OutputBaseFilename=rnnoise-mic-setup-{#AppVersion}
 SetupIconFile=..\assets\rnnoise-mic.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
-LicenseFile=..\LICENSE
 InfoAfterFile=after-install.txt
 WizardStyle=modern
 Compression=lzma2
