@@ -11,7 +11,8 @@ real mic ──► RNNoise Mic (RNNoise, 48 kHz, 10 ms frames) ──► virtual
 
 - Tray icon: green = active, grey = suppression off, red = error (retries automatically,
   e.g. after you re-plug the mic)
-- Tray menu: noise suppression on/off, **Start at login**, About / How to use, Quit
+- Tray menu: noise suppression on/off, **Mute when not speaking** (Off / Low / Medium / High),
+  **Start at login**, About / How to use, Quit. Choices are remembered.
 - No console window; a terminal mode with a live meter is available for debugging
 - Pure Rust: [`nnnoiseless`](https://crates.io/crates/nnnoiseless) (RNNoise port) +
   [`cpal`](https://crates.io/crates/cpal) audio I/O; ~2 MB single executable
@@ -39,6 +40,11 @@ real mic ──► RNNoise Mic (RNNoise, 48 kHz, 10 ms frames) ──► virtual
    **CABLE Output** or **Default**.
 5. Tray menu → **Start at login**, so the virtual mic is always live.
    While RNNoise Mic is not running, CABLE Output is silent.
+
+**Keyboard clicks still audible?** RNNoise removes steady noise (fans, hum, hiss) very
+well, but short sharp sounds like key presses can slip through. Enable tray menu
+→ **Mute when not speaking** (Medium is a good start): it mutes everything between
+your words. Choose Low if word endings get cut off, High if typing still comes through.
 
 Turn off other noise suppression (Krisp, etc.) in your apps; stacking two
 suppressors tends to make voices sound robotic.

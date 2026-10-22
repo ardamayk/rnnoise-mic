@@ -136,6 +136,7 @@ pub struct Engine {
     level: Arc<AtomicU32>,
     failed: Arc<AtomicBool>,
     bypass: Arc<AtomicBool>,
+    gate: Arc<AtomicU32>,
 }
 
 impl Engine {
@@ -155,6 +156,7 @@ impl Engine {
         let mut pipe = dsp::Pipeline::new(in_cfg.sample_rate, in_cfg.channels as usize, output.rate(), gate);
         pipe.bypass.store(opts.bypass, Ordering::Relaxed);
         let bypass = pipe.bypass.clone();
+        let gate = pipe.gate_threshold.clone();
 
         let vad = Arc::new(AtomicU32::new(0));
         let level = Arc::new(AtomicU32::new(0));
@@ -182,7 +184,7 @@ impl Engine {
         )?;
         stream.play()?;
 
-        Ok(Engine { _stream: stream, output, input_name, vad, level, failed, bypass })
+        Ok(Engine { _stream: stream, output, input_name, vad, level, failed, bypass, gate })
     }
 
     pub fn input_name(&self) -> &str {
@@ -203,6 +205,11 @@ impl Engine {
 
     pub fn set_bypass(&self, on: bool) {
         self.bypass.store(on, Ordering::Relaxed);
+    }
+
+    /// Mute when RNNoise's voice probability is below `threshold` (0 = off).
+    pub fn set_gate(&self, threshold: f32) {
+        self.gate.store(threshold.to_bits(), Ordering::Relaxed);
     }
 
     /// One-line live status: input level, voice probability, output buffer.

@@ -3,7 +3,7 @@
 
 use nnnoiseless::DenoiseState;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// RNNoise works on 10 ms frames at 48 kHz.
 pub const RNNOISE_RATE: u32 = 48_000;
@@ -58,7 +58,7 @@ pub struct Pipeline {
     to_48k: Resampler,
     from_48k: Resampler,
     denoise: Box<DenoiseState<'static>>,
-    gate: GateConfig,
+    gate_hold_frames: u32,
     gate_hold: u32,
     gain: f32,
     pending: Vec<f32>,
@@ -69,6 +69,8 @@ pub struct Pipeline {
     pub last_vad: f32,
     /// When set, audio passes through untouched (for A/B comparison).
     pub bypass: Arc<AtomicBool>,
+    /// VAD gate threshold as `f32` bits; can be changed while running (0 = off).
+    pub gate_threshold: Arc<AtomicU32>,
 }
 
 impl Pipeline {
@@ -78,7 +80,7 @@ impl Pipeline {
             to_48k: Resampler::new(in_rate, RNNOISE_RATE),
             from_48k: Resampler::new(RNNOISE_RATE, out_rate),
             denoise: DenoiseState::new(),
-            gate,
+            gate_hold_frames: gate.hold_frames,
             gate_hold: 0,
             gain: 1.0,
             pending: Vec::with_capacity(FRAME * 4),
@@ -88,6 +90,7 @@ impl Pipeline {
             at_48k: Vec::with_capacity(4096),
             last_vad: 0.0,
             bypass: Arc::new(AtomicBool::new(false)),
+            gate_threshold: Arc::new(AtomicU32::new(gate.threshold.to_bits())),
         }
     }
 
@@ -134,11 +137,12 @@ impl Pipeline {
     }
 
     fn gate_target(&mut self, vad: f32) -> f32 {
-        if self.gate.threshold <= 0.0 {
+        let threshold = f32::from_bits(self.gate_threshold.load(Ordering::Relaxed));
+        if threshold <= 0.0 {
             return 1.0;
         }
-        if vad >= self.gate.threshold {
-            self.gate_hold = self.gate.hold_frames;
+        if vad >= threshold {
+            self.gate_hold = self.gate_hold_frames;
             1.0
         } else if self.gate_hold > 0 {
             self.gate_hold -= 1;
@@ -152,6 +156,19 @@ impl Pipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gate_closes_after_hold_and_reopens_on_voice() {
+        let gate = GateConfig { threshold: 0.0, hold_frames: 2 };
+        let mut p = Pipeline::new(48_000, 1, 48_000, gate);
+        assert_eq!(p.gate_target(0.0), 1.0, "gate off passes everything");
+        p.gate_threshold.store(0.6f32.to_bits(), Ordering::Relaxed);
+        assert_eq!(p.gate_target(0.9), 1.0);
+        assert_eq!(p.gate_target(0.1), 1.0, "hold frame 1");
+        assert_eq!(p.gate_target(0.1), 1.0, "hold frame 2");
+        assert_eq!(p.gate_target(0.1), 0.0, "closed after hold");
+        assert_eq!(p.gate_target(0.7), 1.0, "reopens on voice");
+    }
 
     #[test]
     fn resampler_ratio() {

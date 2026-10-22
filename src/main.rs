@@ -16,6 +16,7 @@ mod cable;
 mod dsp;
 mod engine;
 mod icon;
+mod settings;
 mod sys;
 mod tray;
 #[cfg(target_os = "linux")]

@@ -3,7 +3,7 @@
 ; Installs per user (no admin prompt) and registers in Settings > Apps > Installed apps.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.1"
+  #define AppVersion "0.2.0"
 #endif
 #ifndef BinDir
   #define BinDir "..\target\release"

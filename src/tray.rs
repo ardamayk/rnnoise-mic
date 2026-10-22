@@ -1,14 +1,16 @@
 //! System tray app: runs the engine in the background with no window.
-//! Menu: status, noise suppression on/off, start at login, about, quit.
+//! Menu: status, noise suppression on/off, mute when not speaking, start at login,
+//! about, quit. Suppression and gate choices persist (see `settings`).
 
 use crate::engine::{Engine, Options};
 use crate::icon::{self, State};
+use crate::settings::{Gate, Settings};
 use crate::{autostart, sys};
 use anyhow::Result;
 use std::time::{Duration, Instant};
 use tao::event::{Event, StartCause};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
-use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 pub const REPO_URL: &str = "https://github.com/ardamayk/rnnoise-mic";
@@ -55,6 +57,9 @@ Setup (Linux)
     };
     format!(
         "RNNoise Mic {}\nSystem-wide microphone noise suppression (RNNoise).\n\n{how}\n\n\
+         Keyboard clicks still audible? Use \"Mute when not speaking\".\n\
+         RNNoise removes steady noise well, but short clicks can slip\n\
+         through - the gate mutes everything between your words.\n\n\
          Tip: turn off other noise suppression (Krisp etc.) in apps.\n\n{devices}\n\n\
          MIT License - {REPO_URL}",
         env!("CARGO_PKG_VERSION")
@@ -65,7 +70,7 @@ enum UserEvent {
     Menu(MenuEvent),
 }
 
-pub fn run(opts: Options) -> Result<()> {
+pub fn run(mut opts: Options) -> Result<()> {
     let Some(_lock) = sys::InstanceLock::acquire() else {
         sys::message("RNNoise Mic", "RNNoise Mic is already running (see the system tray).");
         return Ok(());
@@ -77,8 +82,24 @@ pub fn run(opts: Options) -> Result<()> {
         let _ = proxy.send_event(UserEvent::Menu(e));
     }));
 
+    // Saved choices, unless overridden on the command line (--bypass / --vad-gate).
+    let mut settings = Settings::load();
+    let cli_gate = opts.vad_gate > 0.0;
+    opts.bypass |= !settings.suppression;
+    if !cli_gate {
+        opts.vad_gate = settings.gate.threshold();
+    }
+
     let status = MenuItem::new("Starting...", false, None);
     let suppress = CheckMenuItem::new("Noise suppression", true, !opts.bypass, None);
+    let gate_items: Vec<(Gate, CheckMenuItem)> = Gate::ALL
+        .into_iter()
+        .map(|g| (g, CheckMenuItem::new(g.label(), true, !cli_gate && g == settings.gate, None)))
+        .collect();
+    let gate_menu = Submenu::new("Mute when not speaking", true);
+    for (_, item) in &gate_items {
+        gate_menu.append(item)?;
+    }
     let login = CheckMenuItem::new("Start at login", true, autostart::is_enabled(), None);
     let about = MenuItem::new("About / How to use", true, None);
     let website = MenuItem::new("Project page", true, None);
@@ -89,6 +110,7 @@ pub fn run(opts: Options) -> Result<()> {
         &status,
         &PredefinedMenuItem::separator(),
         &suppress,
+        &gate_menu,
         &login,
         &PredefinedMenuItem::separator(),
         &about,
@@ -97,7 +119,6 @@ pub fn run(opts: Options) -> Result<()> {
         &quit,
     ])?;
 
-    let mut opts = opts;
     let mut engine: Option<Engine> = None;
     let mut tray: Option<TrayIcon> = None;
     let mut shown: Option<(State, String)> = None;
@@ -130,6 +151,19 @@ pub fn run(opts: Options) -> Result<()> {
                     if let Some(en) = &engine {
                         en.set_bypass(opts.bypass);
                     }
+                    settings.suppression = !opts.bypass;
+                    let _ = settings.save();
+                } else if let Some(&(gate, _)) = gate_items.iter().find(|(_, item)| e.id == item.id()) {
+                    // Behave like radio buttons.
+                    for (g, item) in &gate_items {
+                        item.set_checked(*g == gate);
+                    }
+                    settings.gate = gate;
+                    opts.vad_gate = gate.threshold();
+                    if let Some(en) = &engine {
+                        en.set_gate(opts.vad_gate);
+                    }
+                    let _ = settings.save();
                 } else if e.id == login.id() {
                     let want = login.is_checked();
                     if let Err(err) = autostart::set(want) {
@@ -166,7 +200,11 @@ pub fn run(opts: Options) -> Result<()> {
                 if opts.bypass {
                     (State::Bypassed, format!("Bypassed: {name}"))
                 } else {
+                    if opts.vad_gate > 0.0 {
+                    (State::Active, format!("Active: {name} (muted when silent)"))
+                } else {
                     (State::Active, format!("Active: {name}"))
+                }
                 }
             }
             (None, Some(err)) => (State::Error, format!("Error: {err} (retrying)")),
